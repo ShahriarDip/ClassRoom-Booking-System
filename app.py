@@ -1,43 +1,65 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
+import os
 
 # Page Setup
 st.set_page_config(
-    page_title="Academic Routine & Booking System",
-    page_icon="🏫",
+    page_title="EEE SUST - Classroom Booking System",
+    page_icon="⚡",
     layout="wide"
 )
 
-# --- 1. PRE-DEFINED ACADEMIC CREDENTIALS DATABASE ---
+# --- 1. DISPLAY UNIVERSITY & DEPARTMENT LOGOS ---
+col_logo1, col_header, col_logo2 = st.columns([1, 4, 1])
+
+with col_logo1:
+    if os.path.exists("logo_sust.png"):
+        st.image("logo_sust.png", width=110)
+    else:
+        st.write("🏫 **SUST**")
+
+with col_header:
+    st.title("Department of EEE, SUST")
+    st.subheader("Classroom Routine & Smart Booking Control System")
+    st.caption("Shahjalal University of Science and Technology, Sylhet")
+
+with col_logo2:
+    if os.path.exists("logo_eee.png"):
+        st.image("logo_eee.png", width=110)
+    else:
+        st.write("⚡ **EEE**")
+
+st.markdown("---")
+
+# --- 2. ACADEMIC CREDENTIALS & CONSTANTS ---
 USERS_DB = {
-    "CR-CSE-41": {"password": "cr41password", "role": "CR", "name": "CSE-41 CR", "batch": "CSE-41"},
-    "CR-CSE-42": {"password": "cr42password", "role": "CR", "name": "CSE-42 CR", "batch": "CSE-42"},
-    "T-CSE-RA": {"password": "teacher123", "role": "Teacher", "name": "Dr. Refat Ahmed", "batch": "Faculty"},
-    "T-CSE-SK": {"password": "teacher456", "role": "Teacher", "name": "Prof. S. Khan", "batch": "Faculty"},
-    "ADMIN-CSE": {"password": "adminrootpass", "role": "Admin", "name": "Dept Head / Admin", "batch": "Admin"}
+    "CR-EEE-41": {"password": "cr41password", "role": "CR", "name": "EEE-41 CR", "batch": "EEE-41"},
+    "CR-EEE-42": {"password": "cr42password", "role": "CR", "name": "EEE-42 CR", "batch": "EEE-42"},
+    "T-EEE-RA": {"password": "teacher123", "role": "Teacher", "name": "Dr. Refat Ahmed", "batch": "Faculty"},
+    "T-EEE-SK": {"password": "teacher456", "role": "Teacher", "name": "Prof. S. Khan", "batch": "Faculty"},
+    "ADMIN-EEE": {"password": "adminrootpass", "role": "Admin", "name": "Head of EEE Dept", "batch": "Admin"}
 }
 
-BATCHES = ["CSE-41", "CSE-42", "CSE-43", "EEE-31", "EEE-32"]
-CLASSROOMS = ["Room 101", "Room 102", "Room 201", "Lab 1", "Auditorium"]
+BATCHES = ["EEE-11", "EEE-21", "EEE-31", "EEE-41", "EEE-42"]
+CLASSROOMS = ["Room 101", "Room 102", "Room 201", "EEE Lab 1", "Auditorium"]
+DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
-
-# --- 2. AUTOMATIC DYNAMIC DATE & DAY GENERATION ---
+# Dynamic dates for upcoming week
 def get_upcoming_week_dates():
-    """Generates the next 7 days starting from today with exact dates."""
     today = datetime.now()
-    dates_list = []
+    dates_dict = {}
     for i in range(7):
-        day_date = today + timedelta(days=i)
-        # Format example: "Monday (Aug 31, 2026)"
-        formatted = day_date.strftime("%A (%b %d, %Y)")
-        dates_list.append(formatted)
-    return dates_list
+        d = today + timedelta(days=i)
+        day_name = d.strftime("%A")
+        full_str = d.strftime("%A (%b %d, %Y)")
+        dates_dict[full_str] = day_name
+    return dates_dict
 
+WEEK_DATES_DICT = get_upcoming_week_dates()
+WEEK_DATES_LIST = list(WEEK_DATES_DICT.keys())
 
-WEEK_DATES = get_upcoming_week_dates()
-
-# Session State Initializations
+# --- 3. SESSION STATE INITIALIZATION ---
 if "time_slots" not in st.session_state:
     st.session_state.time_slots = [
         "08:30 AM - 09:30 AM",
@@ -49,47 +71,65 @@ if "time_slots" not in st.session_state:
         "03:30 PM - 04:30 PM"
     ]
 
-if "bookings" not in st.session_state:
-    st.session_state.bookings = [
+# Master Weekly Routine set by Department Admin (Applies continuously every week)
+if "master_routine" not in st.session_state:
+    st.session_state.master_routine = [
         {
-            "DateDay": WEEK_DATES[0],
+            "Day": "Monday",
             "Slot": "08:30 AM - 09:30 AM",
             "Classroom": "Room 101",
-            "Batch": "CSE-41",
-            "BookedBy": "CR-CSE-41",
-            "Role": "CR",
-            "Teacher": "Dr. Refat Ahmed"
+            "Batch": "EEE-41",
+            "Teacher": "Dr. Refat Ahmed",
+            "Type": "Master Routine"
         },
         {
-            "DateDay": WEEK_DATES[0],
+            "Day": "Wednesday",
             "Slot": "10:30 AM - 11:30 AM",
-            "Classroom": "Lab 1",
-            "Batch": "CSE-42",
-            "BookedBy": "T-CSE-SK",
-            "Role": "Teacher",
-            "Teacher": "Prof. S. Khan"
+            "Classroom": "EEE Lab 1",
+            "Batch": "EEE-42",
+            "Teacher": "Prof. S. Khan",
+            "Type": "Master Routine"
         }
     ]
+
+# Temporary CR/Teacher dynamic reservations
+if "ad_hoc_bookings" not in st.session_state:
+    st.session_state.ad_hoc_bookings = []
 
 if "logged_user" not in st.session_state:
     st.session_state.logged_user = None
 
-
-def get_slot_booking(dateday, slot, room):
-    for b in st.session_state.bookings:
-        if b["DateDay"] == dateday and b["Slot"] == slot and b["Classroom"] == room:
+# Query Helper: Combines Master Routine + Temporary Bookings
+def get_slot_status(dateday_str, slot, room):
+    day_name = WEEK_DATES_DICT[dateday_str]
+    
+    # 1. Check temporary bookings for exact date
+    for b in st.session_state.ad_hoc_bookings:
+        if b["DateDay"] == dateday_str and b["Slot"] == slot and b["Classroom"] == room:
             return b
+            
+    # 2. Check recurring Master Semester Routine for weekday name
+    for m in st.session_state.master_routine:
+        if m["Day"] == day_name and m["Slot"] == slot and m["Classroom"] == room:
+            return {
+                "DateDay": dateday_str,
+                "Slot": slot,
+                "Classroom": room,
+                "Batch": m["Batch"],
+                "Teacher": m["Teacher"],
+                "BookedBy": "Dept Routine",
+                "Type": "Master Routine"
+            }
     return None
 
-
-# --- 3. SECURE SIDEBAR AUTHENTICATION ---
-st.sidebar.title("🔐 Department Portal")
+# --- 4. SECURE SIDEBAR LOGINS ---
+st.sidebar.title("🔐 EEE Portal Login")
 
 if st.session_state.logged_user is None:
     st.sidebar.subheader("User Login")
-    input_uid = st.sidebar.text_input("Unique ID", placeholder="e.g. CR-CSE-41, T-CSE-RA").strip()
+    input_uid = st.sidebar.text_input("Unique ID", placeholder="e.g. CR-EEE-41, ADMIN-EEE").strip()
     input_pwd = st.sidebar.text_input("Password", type="password").strip()
-
+    
     if st.sidebar.button("Login", type="primary", use_container_width=True):
         if input_uid in USERS_DB and USERS_DB[input_uid]["password"] == input_pwd:
             st.session_state.logged_user = {
@@ -101,192 +141,187 @@ if st.session_state.logged_user is None:
             st.sidebar.success(f"Welcome, {USERS_DB[input_uid]['name']}!")
             st.rerun()
         else:
-            st.sidebar.error("Invalid Unique ID or Password!")
+            st.sidebar.error("Invalid Credentials!")
 else:
     user = st.session_state.logged_user
     st.sidebar.success("🟢 **Logged In**")
     st.sidebar.markdown(f"**User:** {user['name']}\n\n**Role:** `{user['role']}`\n\n**ID:** `{user['uid']}`")
-
+    
     if st.sidebar.button("Logout", use_container_width=True):
         st.session_state.logged_user = None
         st.rerun()
 
-# --- 4. MAIN INTERFACE ---
-st.title("🏫 Classroom Booking & Schedule Portal")
-
-# Configure dynamic tabs based on user role
+# --- 5. MAIN INTERFACE & TAB NAVIGATION ---
 logged_role = st.session_state.logged_user["role"] if st.session_state.logged_user else None
 
 if logged_role == "Teacher":
-    tab_teacher, tab1, tab2, tab3 = st.tabs(
-        ["👨‍🏫 My Classes Today", "📅 Room Availability", "➕ Reserve Slot", "🔄 Free Slot"])
+    tab_teacher, tab1, tab2, tab3 = st.tabs(["👨‍🏫 My Classes Today", "📅 Availability Matrix", "➕ Reserve Extra Slot", "🔄 Free/Cancel Slot"])
 elif logged_role == "Admin":
-    tab1, tab2, tab3, tab4 = st.tabs(["📅 Room Availability", "➕ Reserve Slot", "🔄 Free Slot", "⚙️ Admin Routines"])
+    tab1, tab2, tab3, tab_admin = st.tabs(["📅 Availability Matrix", "➕ Reserve Extra Slot", "🔄 Free/Cancel Slot", "⚙️ Admin Master Routine"])
     tab_teacher = None
 else:
-    tab1, tab2, tab3 = st.tabs(["📅 Room Availability", "➕ Reserve Slot", "🔄 Free Slot"])
+    tab1, tab2, tab3 = st.tabs(["📅 Availability Matrix", "➕ Reserve Extra Slot", "🔄 Free/Cancel Slot"])
     tab_teacher = None
 
-# --- NEW FEATURE 3: TEACHER PERSONAL SCHEDULE ---
+# --- TEACHER TAB ---
 if tab_teacher and logged_role == "Teacher":
     with tab_teacher:
         teacher_name = st.session_state.logged_user["name"]
-        st.subheader(f"👨‍🏫 Assigned Classes for {teacher_name}")
-
-        t_selected_date = st.selectbox("Select Date", WEEK_DATES, key="teacher_date_select")
-
-        # Filter bookings matching logged-in teacher's name and selected date
-        my_classes = [
-            b for b in st.session_state.bookings
-            if b["DateDay"] == t_selected_date and b["Teacher"].lower() == teacher_name.lower()
-        ]
-
+        st.subheader(f"👨‍🏫 Assigned Schedule for {teacher_name}")
+        t_selected_date = st.selectbox("Select Date", WEEK_DATES_LIST, key="t_date")
+        
+        my_classes = []
+        for slot in st.session_state.time_slots:
+            for room in CLASSROOMS:
+                status = get_slot_status(t_selected_date, slot, room)
+                if status and status["Teacher"].lower() == teacher_name.lower():
+                    my_classes.append(status)
+                    
         if my_classes:
-            st.markdown(f"#### You have **{len(my_classes)}** class(es) scheduled on {t_selected_date}:")
+            st.markdown(f"#### Scheduled classes for **{t_selected_date}**:")
             for c in my_classes:
-                st.info(
-                    f"⏰ **{c['Slot']}** | 🏫 **Location:** {c['Classroom']} | "
-                    f"🎓 **Batch:** {c['Batch']} (Booked by: `{c['BookedBy']}`)"
-                )
+                st.info(f"⏰ **{c['Slot']}** | 🏫 **{c['Classroom']}** | 🎓 **Batch:** {c['Batch']} | Type: `{c['Type']}`")
         else:
-            st.success(f"🎉 No classes scheduled for you on **{t_selected_date}**.")
+            st.success("🎉 No classes scheduled for you on this day.")
 
-# --- TAB 1: SCHEDULE & ROOM AVAILABILITY (WITH BATCH FILTERING) ---
+# --- TAB 1: AVAILABILITY & FILTERING ---
 with tab1:
-    st.subheader("📅 Schedule & Availability Tracker")
-
+    st.subheader("📅 Classroom Routine & Availability Tracker")
     col_d, col_r = st.columns(2)
     with col_d:
-        selected_date = st.selectbox("Select Date & Day", WEEK_DATES)
+        selected_date = st.selectbox("Select Date & Day", WEEK_DATES_LIST)
     with col_r:
         selected_room = st.selectbox("Select Classroom", CLASSROOMS)
 
-    # NEW FEATURE 2: BATCH FILTERING FOR STUDENTS
-    st.markdown("---")
-    col_filter, _ = st.columns([1, 1])
-    with col_filter:
-        filter_batch = st.selectbox(
-            "🔍 Filter Schedule by Batch (Optional):",
-            ["All Batches"] + BATCHES
-        )
+    col_f, _ = st.columns([1, 1])
+    with col_f:
+        filter_batch = st.selectbox("🔍 Filter Schedule by Batch:", ["All Batches"] + BATCHES)
 
-    st.markdown(f"#### Matrix: **{selected_room}** on **{selected_date}**")
-
+    st.markdown(f"#### Room View: **{selected_room}** ({selected_date})")
+    
     for slot in st.session_state.time_slots:
-        booking = get_slot_booking(selected_date, slot, selected_room)
-
-        # Apply Batch Filter if selected
+        booking = get_slot_status(selected_date, slot, selected_room)
+        
         if filter_batch != "All Batches" and booking and booking["Batch"] != filter_batch:
             continue
-
+            
         with st.container():
             if booking:
+                b_type = booking.get("Type", "Ad-hoc Booking")
                 st.error(
                     f"🔴 **{slot}** | **Batch:** {booking['Batch']} | "
-                    f"**Teacher:** {booking['Teacher']} (Reserved by `{booking['BookedBy']}`)"
+                    f"**Teacher:** {booking['Teacher']} (`{b_type}`)"
                 )
             else:
-                st.success(f"🟢 **{slot}** | **Status:** Open for Booking")
+                st.success(f"🟢 **{slot}** | **Status:** Free / Open for Booking")
 
-# --- TAB 2: RESERVATION ---
+# --- TAB 2: AD-HOC RESERVATIONS ---
 with tab2:
-    st.subheader("Reserve a Classroom Slot")
-
+    st.subheader("Reserve an Open Slot")
     if st.session_state.logged_user is None:
-        st.warning("🔒 Please login from the sidebar using your Unique ID and Password to book slots.")
+        st.warning("🔒 Please login from the sidebar using your Unique ID and Password.")
     else:
         current_user = st.session_state.logged_user
-
+        
         with st.form("booking_form", clear_on_submit=True):
             st.info(f"Booking as: **{current_user['name']}** (`{current_user['role']}`)")
-
-            b_date = st.selectbox("Date & Day", WEEK_DATES)
+            
+            b_date = st.selectbox("Date & Day", WEEK_DATES_LIST)
             b_slot = st.selectbox("Time Slot", st.session_state.time_slots)
             b_room = st.selectbox("Classroom", CLASSROOMS)
-
+            
             if current_user["role"] == "CR":
                 target_batch = st.text_input("Target Batch", value=current_user["batch"], disabled=True)
             else:
                 target_batch = st.selectbox("Target Batch", BATCHES)
-
+                
             if current_user["role"] == "Teacher":
                 assigned_teacher = st.text_input("Conducting Teacher", value=current_user["name"], disabled=True)
             else:
                 assigned_teacher = st.text_input("Conducting Teacher Name", placeholder="e.g. Dr. Refat Ahmed")
 
             submit_btn = st.form_submit_button("Confirm Reservation", use_container_width=True)
-
+            
             if submit_btn:
-                if not assigned_teacher:
-                    st.error("⚠️ Please specify the Conducting Teacher Name.")
+                existing = get_slot_status(b_date, b_slot, b_room)
+                if existing:
+                    st.error(f"❌ Slot occupied by **{existing['Batch']}** ({existing['Teacher']}).")
                 else:
-                    existing = get_slot_booking(b_date, b_slot, b_room)
-                    if existing:
-                        st.error(f"❌ Slot already occupied by **{existing['Batch']}** ({existing['Teacher']}).")
-                    else:
-                        st.session_state.bookings.append({
-                            "DateDay": b_date,
-                            "Slot": b_slot,
-                            "Classroom": b_room,
-                            "Batch": target_batch,
-                            "BookedBy": current_user["uid"],
-                            "Role": current_user["role"],
-                            "Teacher": assigned_teacher
-                        })
-                        st.success(f"✅ Reserved **{b_room}** on **{b_date} ({b_slot})**!")
-                        st.rerun()
+                    st.session_state.ad_hoc_bookings.append({
+                        "DateDay": b_date,
+                        "Slot": b_slot,
+                        "Classroom": b_room,
+                        "Batch": target_batch,
+                        "BookedBy": current_user["uid"],
+                        "Role": current_user["role"],
+                        "Teacher": assigned_teacher,
+                        "Type": "CR/Teacher Reserve"
+                    })
+                    st.success("✅ Slot reserved successfully!")
+                    st.rerun()
 
-# --- TAB 3: CANCELLATION ---
+# --- TAB 3: CANCELLATIONS ---
 with tab3:
-    st.subheader("Free Up / Cancel a Scheduled Slot")
-
+    st.subheader("Free Up / Cancel a Booking")
     if st.session_state.logged_user is None:
-        st.warning("🔒 Please login from the sidebar to manage or cancel booked slots.")
-    elif len(st.session_state.bookings) == 0:
-        st.info("No active reservations exist in the system.")
+        st.warning("🔒 Please login to manage or cancel slots.")
     else:
-        options = [
-            f"{b['DateDay']} | {b['Slot']} | {b['Classroom']} | Batch: {b['Batch']} (Teacher: {b['Teacher']})"
-            for b in st.session_state.bookings
-        ]
+        # Allows canceling temporary bookings
+        if st.session_state.ad_hoc_bookings:
+            opts = [f"{b['DateDay']} | {b['Slot']} | {b['Classroom']} | Batch: {b['Batch']}" for b in st.session_state.ad_hoc_bookings]
+            selected_cancel = st.selectbox("Select Extra Booking to Free", opts)
+            
+            if st.button("Cancel Selected Booking", type="primary", use_container_width=True):
+                idx = opts.index(selected_cancel)
+                st.session_state.ad_hoc_bookings.pop(idx)
+                st.success("🔓 Reserved slot freed successfully!")
+                st.rerun()
+        else:
+            st.info("No active extra reservations to cancel.")
 
-        selected_cancel = st.selectbox("Select Class Slot to Cancel", options)
-
-        if st.button("Cancel & Free Slot", type="primary", use_container_width=True):
-            idx = options.index(selected_cancel)
-            freed = st.session_state.bookings.pop(idx)
-            st.success(f"🔓 Freed **{freed['Classroom']}** on **{freed['DateDay']} ({freed['Slot']})**.")
-            st.rerun()
-
-# --- TAB 4: ADMIN CONTROLS ---
-if logged_role == "Admin" and tab4:
-    with tab4:
-        st.subheader("⚙️ Admin Semester Settings")
-        st.markdown("##### Current Time Slots Configuration")
-
-        updated_slots = []
-        for i, slot in enumerate(st.session_state.time_slots):
-            new_val = st.text_input(f"Slot #{i + 1}", value=slot, key=f"slot_cfg_{i}")
-            updated_slots.append(new_val)
-
-        col_admin1, col_admin2 = st.columns(2)
-        with col_admin1:
-            if st.button("💾 Save Updated Slot Timings", use_container_width=True):
-                st.session_state.time_slots = updated_slots
-                st.success("Slot timings updated globally!")
+# --- ADMIN TAB: EDIT MASTER SEMESTER ROUTINE ---
+if logged_role == "Admin" and tab_admin:
+    with tab_admin:
+        st.subheader("⚙️ Department Master Routine Management")
+        st.caption("Assign recurring weekly classes (Rooms, Slots, Batches, Teachers) for the full semester.")
+        
+        with st.form("admin_routine_form", clear_on_submit=True):
+            st.markdown("##### Add New Recurring Class to Master Routine")
+            r_day = st.selectbox("Day of Week", DAYS)
+            r_slot = st.selectbox("Time Slot", st.session_state.time_slots)
+            r_room = st.selectbox("Classroom", CLASSROOMS)
+            r_batch = st.selectbox("Batch", BATCHES)
+            r_teacher = st.text_input("Assigned Teacher Name")
+            
+            add_routine_btn = st.form_submit_button("➕ Add to Master Routine", use_container_width=True)
+            if add_routine_btn:
+                if not r_teacher:
+                    st.error("Please specify a teacher name.")
+                else:
+                    st.session_state.master_routine.append({
+                        "Day": r_day,
+                        "Slot": r_slot,
+                        "Classroom": r_room,
+                        "Batch": r_batch,
+                        "Teacher": r_teacher,
+                        "Type": "Master Routine"
+                    })
+                    st.success(f"Added recurring class for {r_batch} on {r_day}s!")
+                    st.rerun()
+                    
+        st.markdown("---")
+        st.markdown("##### Current Master Semester Routine")
+        if st.session_state.master_routine:
+            df_m = pd.DataFrame(st.session_state.master_routine)
+            st.dataframe(df_m, use_container_width=True)
+            
+            if st.button("⚠️ Clear Entire Master Routine", type="primary"):
+                st.session_state.master_routine = []
+                st.success("Master routine cleared!")
                 st.rerun()
 
-        with col_admin2:
-            if st.button("⚠️ Reset All Bookings", type="primary", use_container_width=True):
-                st.session_state.bookings = []
-                st.success("All room bookings cleared!")
-                st.rerun()
-
-# --- 5. GLOBAL MASTER DATABASE TABLE ---
+# --- 6. MASTER DATA VIEW ---
 st.markdown("---")
-with st.expander("📋 View Master Schedule Database"):
-    if st.session_state.bookings:
-        df = pd.DataFrame(st.session_state.bookings)
-        st.dataframe(df, use_container_width=True)
-    else:
-        st.write("No active room reservations.")
+with st.expander("📋 View Master Semester Schedule Data"):
+    if st.session_state.master_routine:
+        st.dataframe(pd.DataFrame(st.session_state.master_routine), use_container_width=True)
