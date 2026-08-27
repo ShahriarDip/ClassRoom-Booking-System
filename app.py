@@ -42,7 +42,7 @@ USERS_DB = {
 }
 
 BATCHES = ["EEE-1/1", "EEE-1/2", "EEE-2/1", "EEE-2/2", "EEE-3/1", "EEE-3/2", "EEE-4/1", "EEE-4/2"]
-CLASSROOMS = ["Room 429", "Room 431", "Room 529", "Room 531", "Room 530-Simulation Lab", "Circuit Lab", "Auditorium"]
+CLASSROOMS = ["Room 429", "Room 431", "Room 529", "Room 531", "Room 530-Simulation Lab", "Circuit Lab", "Machine Lab", "Exam Center-1029"]
 DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
 
