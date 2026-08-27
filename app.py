@@ -41,8 +41,8 @@ USERS_DB = {
     "ADMIN-EEE": {"password": "adminrootpass", "role": "Admin", "name": "Head of EEE Dept", "batch": "Admin"}
 }
 
-BATCHES = ["EEE-11", "EEE-21", "EEE-31", "EEE-41", "EEE-42"]
-CLASSROOMS = ["Room 101", "Room 102", "Room 201", "EEE Lab 1", "Auditorium"]
+BATCHES = ["EEE-1/1", "EEE-1/2", "EEE-2/1", "EEE-2/2", "EEE-3/1", "EEE-3/2", "EEE-4/1", "EEE-4/2"]
+CLASSROOMS = ["Room 429", "Room 431", "Room 529", "Room 531","Room 530-Simulation Lab", "Circuit Lab", "Auditorium"]
 DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
 # Dynamic dates for upcoming week
